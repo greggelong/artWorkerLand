@@ -735,7 +735,8 @@
         // Look joystick
         const jLook = document.getElementById('joy-look');
         const jLookKnob = document.getElementById('joy-look-knob');
-        let lookTouchId = null, lastLookX = 0, lastLookY = 0;
+        //let lookTouchId = null, lastLookX = 0, lastLookY = 0;
+        let lookTouchId = null, lastLookX = 0, lastLookY = 0, kx_acc = 0, ky_acc = 0;
 
         jLook.addEventListener('touchstart', e => {
             e.preventDefault();
@@ -751,16 +752,21 @@
                 theta -= dx * 0.006;
                 phi = Math.max(-1.2, Math.min(1.2, phi - dy * 0.006));
                 lastLookX = t.clientX; lastLookY = t.clientY;
-                const clamp = 40;
+                /* const clamp = 40;
                 const r = jLook.getBoundingClientRect();
                 const ox = Math.max(-clamp, Math.min(clamp, t.clientX - (r.left + r.width / 2)));
                 const oy = Math.max(-clamp, Math.min(clamp, t.clientY - (r.top + r.height / 2)));
-                jLookKnob.style.transform = `translate(calc(-50% + ${ox}px), calc(-50% + ${oy}px))`;
+                jLookKnob.style.transform = `translate(calc(-50% + ${ox}px), calc(-50% + ${oy}px))`; */
+                const clamp = 40;
+                let kx = (kx_acc = Math.max(-clamp, Math.min(clamp, (kx_acc || 0) + dx)));
+                let ky = (ky_acc = Math.max(-clamp, Math.min(clamp, (ky_acc || 0) + dy)));
+                jLookKnob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
             }
         }, { passive: false });
         jLook.addEventListener('touchend', e => {
             e.preventDefault();
-            lookTouchId = null;
+            //lookTouchId = null;
+            lookTouchId = null; kx_acc = 0; ky_acc = 0;
             jLookKnob.style.transform = 'translate(-50%,-50%)';
         }, { passive: false });
 
