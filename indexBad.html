@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dystopian Wasteland</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #1a1a1a;
+            font-family: 'Courier New', monospace;
+            touch-action: none;
+        }
+
+        #hud {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            color: #ff4400;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #ff4400;
+            padding: 10px 14px;
+            border-radius: 4px;
+            font-size: 13px;
+            z-index: 100;
+            text-shadow: 0 0 8px #ff4400;
+            line-height: 1.7;
+        }
+
+        #warning {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            color: #ffcc00;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #ffcc00;
+            padding: 8px 14px;
+            font-size: 13px;
+            z-index: 100;
+            font-weight: bold;
+            animation: blink 1.4s infinite;
+            text-shadow: 0 0 8px #ffcc00;
+        }
+
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff4400;
+            font-size: 20px;
+            z-index: 100;
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff4400;
+            font-size: 26px;
+            font-weight: bold;
+            letter-spacing: 4px;
+            text-align: center;
+            text-shadow: 0 0 20px #ff4400;
+            z-index: 200;
+        }
+
+        #loading::after {
+            content: '';
+            display: block;
+            width: 50px;
+            height: 50px;
+            margin: 16px auto 0;
+            border: 3px solid #333;
+            border-top-color: #ff4400;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: 0.3
+            }
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="hud">
+        ▲ WASD / ARROWS: Move<br>
+        ● SPACE: Jump<br>
+        ■ SHIFT: Sprint<br>
+        ✦ CLICK: Look
+    </div>
+    <div id="warning">⚠ DANGER ZONE — AUTHORIZED PERSONNEL ONLY</div>
+    <div id="crosshair">+</div>
+    <div id="loading">ENTERING SECTOR 7<br><span style="font-size:14px;opacity:0.6">LOADING WASTELAND...</span></div>
+
+    <div id="joy-look"
+        style="position:absolute;right:24px;bottom:140px;width:110px;height:110px;background:rgba(255,100,0,0.15);border:2px solid rgba(255,100,0,0.4);border-radius:50%;touch-action:none;z-index:300;display:none;">
+        <div id="joy-look-knob"
+            style="position:absolute;width:44px;height:44px;background:rgba(255,100,0,0.6);border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);">
+        </div>
+    </div>
+    <div id="joy-move"
+        style="position:absolute;left:24px;bottom:140px;width:110px;height:110px;background:rgba(255,100,0,0.15);border:2px solid rgba(255,100,0,0.4);border-radius:50%;touch-action:none;z-index:300;display:none;">
+        <div id="joy-move-knob"
+            style="position:absolute;width:44px;height:44px;background:rgba(255,100,0,0.6);border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);">
+        </div>
+    </div>
+    <button id="btn-jump"
+        style="position:absolute;right:24px;bottom:40px;width:80px;height:80px;background:rgba(255,200,0,0.2);border:2px solid #ffcc00;border-radius:50%;color:#ffcc00;font-family:Courier New,monospace;font-size:13px;font-weight:bold;z-index:300;display:none;touch-action:none;">JUMP</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x1a1008, 0.018);
+        scene.background = new THREE.Color(0x1a1008);
+
+        const camera = new THREE.PerspectiveCamera(80, innerWidth / innerHeight, 0.1, 300);
+        camera.position.set(0, 2.2, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(innerWidth, innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+        document.body.appendChild(renderer.domElement);
+
+        setTimeout(() => document.getElementById('loading').style.display = 'none', 1200);
+
+        // === LIGHTING ===
+        scene.add(new THREE.AmbientLight(0x554433, 2.2));
+        const sun = new THREE.DirectionalLight(0xff9944, 1.1);
+        sun.position.set(-30, 60, -20);
+        sun.castShadow = true;
+        sun.shadow.camera.left = -80; sun.shadow.camera.right = 80;
+        sun.shadow.camera.top = 80; sun.shadow.camera.bottom = -80;
+        scene.add(sun);
+
+        const torch = new THREE.SpotLight(0xfff5cc, 2.5, 50, Math.PI / 7, 0.4, 1.2);
+        camera.add(torch);
+        const torchTarget = new THREE.Object3D();
+        torchTarget.position.set(0, 0, -10);
+        camera.add(torchTarget);
+        torch.target = torchTarget;
+        scene.add(camera);
+
+        // === MATERIALS & HELPERS ===
+        const concreteMat = new THREE.MeshLambertMaterial({ color: 0x5a5550 });
+        const steelMat = new THREE.MeshPhongMaterial({ color: 0x445566, shininess: 60 });
+        const rustMat = new THREE.MeshLambertMaterial({ color: 0x7a3a1a });
+        const boneMat = new THREE.MeshLambertMaterial({ color: 0xd4c9a8 });
+        const groundMat = new THREE.MeshLambertMaterial({ color: 0x2a2018 });
+        function rnd(a, b) { return a + Math.random() * (b - a); }
+        function rndInt(a, b) { return Math.floor(rnd(a, b + 1)); }
+
+        // === GENERATION LOGIC (MINIMIZED FOR BREVITY) ===
+        function createBrick(x, y, z) {
+            const g = new THREE.BoxGeometry(rnd(0.4, 0.9), rnd(0.25, 0.45), rnd(0.4, 0.75));
+            const m = new THREE.Mesh(g, concreteMat);
+            m.position.set(x, y, z);
+            m.castShadow = true; return m;
+        }
+
+        function createChunk(cx, cz) {
+            const key = `${cx},${cz}`;
+            const g = new THREE.Group();
+            const groundG = new THREE.PlaneGeometry(60, 60);
+            const ground = new THREE.Mesh(groundG, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            g.add(ground);
+
+            // Simple debris
+            for (let i = 0; i < 10; i++) g.add(createBrick(rnd(-20, 20), 0.2, rnd(-20, 20)));
+
+            g.position.set(cx * 60, 0, cz * 60);
+            chunks.set(key, g);
+            scene.add(g);
+            loaded.add(key);
+        }
+
+        const chunks = new Map(), loaded = new Set();
+        function updateChunks() {
+            const pcx = Math.floor(camera.position.x / 60);
+            const pcz = Math.floor(camera.position.z / 60);
+            for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) {
+                const key = `${pcx + x},${pcz + z}`;
+                if (!loaded.has(key)) createChunk(pcx + x, pcz + z);
+            }
+        }
+
+        // === CONTROLS ===
+        const keys = {};
+        let moveVec = { x: 0, y: 0 };
+        let theta = 0, phi = 0, vy = 0, isGrounded = true;
+
+        window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+        window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+        renderer.domElement.addEventListener('click', () => { if (!isMobile) renderer.domElement.requestPointerLock() });
+
+        document.addEventListener('mousemove', e => {
+            if (document.pointerLockElement !== renderer.domElement) return;
+            theta -= e.movementX * 0.004;
+            phi = Math.max(-1.2, Math.min(1.2, phi - e.movementY * 0.004));
+        });
+
+        const isMobile = /Mobi|Android|iPhone|iPad|iPod|Touch/i.test(navigator.userAgent);
+        if (isMobile) {
+            document.querySelectorAll('#joy-move, #joy-look, #btn-jump').forEach(el => el.style.display = 'block');
+            document.getElementById('hud').style.display = 'none';
+        }
+
+        // Move Joystick Logic
+        const jMove = document.getElementById('joy-move'), jMoveKnob = document.getElementById('joy-move-knob');
+        let moveTouchId = null;
+
+        function updateMoveJoy(t) {
+            const r = jMove.getBoundingClientRect();
+            const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+            let dx = t.clientX - cx, dy = t.clientY - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const clamped = Math.min(dist, 40);
+            if (dist > 0) { dx = (dx / dist) * clamped; dy = (dy / dist) * clamped; }
+            moveVec = { x: dx / 40, y: dy / 40 };
+            jMoveKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+        }
+
+        jMove.addEventListener('touchstart', e => { moveTouchId = e.changedTouches[0].identifier; updateMoveJoy(e.changedTouches[0]); }, { passive: false });
+        jMove.addEventListener('touchmove', e => {
+            for (const t of e.changedTouches) if (t.identifier === moveTouchId) updateMoveJoy(t);
+        }, { passive: false });
+        jMove.addEventListener('touchend', () => { moveVec = { x: 0, y: 0 }; jMoveKnob.style.transform = 'translate(-50%,-50%)'; });
+
+        // Look Joystick Logic
+        const jLook = document.getElementById('joy-look'), jLookKnob = document.getElementById('joy-look-knob');
+        let lookTouchId = null, lx = 0, ly = 0;
+
+        jLook.addEventListener('touchstart', e => {
+            lookTouchId = e.changedTouches[0].identifier;
+            lx = e.changedTouches[0].clientX; ly = e.changedTouches[0].clientY;
+        });
+        jLook.addEventListener('touchmove', e => {
+            for (const t of e.changedTouches) {
+                if (t.identifier !== lookTouchId) continue;
+                theta -= (t.clientX - lx) * 0.007;
+                phi = Math.max(-1.2, Math.min(1.2, phi - (t.clientY - ly) * 0.007));
+                lx = t.clientX; ly = t.clientY;
+            }
+        });
+        jLook.addEventListener('touchend', () => lookTouchId = null);
+
+        document.getElementById('btn-jump').addEventListener('touchstart', () => { if (isGrounded) { vy = 0.25; isGrounded = false; } });
+
+        // === ANIMATION LOOP ===
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const spd = (keys['shift'] || isMobile) ? 0.22 : 0.14; // Default mobile to a brisk walk
+
+            const fwd = new THREE.Vector3(Math.sin(theta), 0, Math.cos(theta));
+            const rgt = new THREE.Vector3(Math.sin(theta + Math.PI / 2), 0, Math.cos(theta + Math.PI / 2));
+
+            // Keyboard Move
+            if (keys['w']) camera.position.addScaledVector(fwd, spd);
+            if (keys['s']) camera.position.addScaledVector(fwd, -spd);
+            if (keys['a']) camera.position.addScaledVector(rgt, spd);
+            if (keys['d']) camera.position.addScaledVector(rgt, -spd);
+
+            // Mobile Joystick Move (The Missing Part!)
+            if (isMobile) {
+                camera.position.addScaledVector(fwd, -moveVec.y * spd);
+                camera.position.addScaledVector(rgt, -moveVec.x * spd);
+            }
+
+            vy -= 0.015;
+            camera.position.y += vy;
+            if (camera.position.y < 2.2) { camera.position.y = 2.2; vy = 0; isGrounded = true; }
+
+            const look = new THREE.Vector3(Math.sin(theta) * Math.cos(phi), -Math.sin(phi), Math.cos(theta) * Math.cos(phi));
+            camera.lookAt(camera.position.clone().add(look));
+
+            updateChunks();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+
+</html>
