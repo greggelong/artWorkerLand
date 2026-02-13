@@ -838,7 +838,8 @@
             if (isMobile && lookTouchId !== null) {
                 const turnSensitivity = 0.05; // Adjust this number to turn faster/slower
                 theta -= lookVec.x * turnSensitivity;
-                phi = Math.max(-1.2, Math.min(1.2, phi - lookVec.y * turnSensitivity));
+                //phi = Math.max(-1.2, Math.min(1.2, phi - lookVec.y * turnSensitivity));
+                phi = Math.max(-1.2, Math.min(1.2, phi + lookVec.y * turnSensitivity));
             }
 
             // 2. MOVEMENT VECTORS
