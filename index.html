@@ -683,7 +683,8 @@
 
         // Detect mobile
         const isMobile = /Mobi|Android|iPhone|iPad|iPod|Touch/i.test(navigator.userAgent) || ('ontouchstart' in window);
-
+        // Add this line BEFORE your joystick event listeners
+        let lookVec = { x: 0, y: 0 };
         if (isMobile) {
             document.getElementById('joy-move').style.display = 'block';
             document.getElementById('joy-look').style.display = 'block';
@@ -738,35 +739,73 @@
         //let lookTouchId = null, lastLookX = 0, lastLookY = 0;
         let lookTouchId = null, lastLookX = 0, lastLookY = 0, kx_acc = 0, ky_acc = 0;
 
+        /*  jLook.addEventListener('touchstart', e => {
+             e.preventDefault();
+             const t = e.changedTouches[0];
+             lookTouchId = t.identifier;
+             lastLookX = t.clientX; lastLookY = t.clientY;
+         }, { passive: false });
+         jLook.addEventListener('touchmove', e => {
+             e.preventDefault();
+             for (const t of e.changedTouches) {
+                 if (t.identifier !== lookTouchId) continue;
+                 const dx = t.clientX - lastLookX, dy = t.clientY - lastLookY;
+                 theta -= dx * 0.006;
+                 phi = Math.max(-1.2, Math.min(1.2, phi - dy * 0.006));
+                 lastLookX = t.clientX; lastLookY = t.clientY;
+                 /* const clamp = 40;
+                 const r = jLook.getBoundingClientRect();
+                 const ox = Math.max(-clamp, Math.min(clamp, t.clientX - (r.left + r.width / 2)));
+                 const oy = Math.max(-clamp, Math.min(clamp, t.clientY - (r.top + r.height / 2)));
+                 jLookKnob.style.transform = `translate(calc(-50% + ${ox}px), calc(-50% + ${oy}px))`; 
+                 const clamp = 40;
+                 let kx = (kx_acc = Math.max(-clamp, Math.min(clamp, (kx_acc || 0) + dx)));
+                 let ky = (ky_acc = Math.max(-clamp, Math.min(clamp, (ky_acc || 0) + dy)));
+                 jLookKnob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
+             }
+         }, { passive: false });
+         jLook.addEventListener('touchend', e => {
+             e.preventDefault();
+             //lookTouchId = null;
+             lookTouchId = null; kx_acc = 0; ky_acc = 0;
+             jLookKnob.style.transform = 'translate(-50%,-50%)';
+         }, { passive: false });
+  */
+        // Look joystick logic
         jLook.addEventListener('touchstart', e => {
             e.preventDefault();
             const t = e.changedTouches[0];
             lookTouchId = t.identifier;
-            lastLookX = t.clientX; lastLookY = t.clientY;
         }, { passive: false });
+
         jLook.addEventListener('touchmove', e => {
             e.preventDefault();
             for (const t of e.changedTouches) {
                 if (t.identifier !== lookTouchId) continue;
-                const dx = t.clientX - lastLookX, dy = t.clientY - lastLookY;
-                theta -= dx * 0.006;
-                phi = Math.max(-1.2, Math.min(1.2, phi - dy * 0.006));
-                lastLookX = t.clientX; lastLookY = t.clientY;
-                /* const clamp = 40;
                 const r = jLook.getBoundingClientRect();
-                const ox = Math.max(-clamp, Math.min(clamp, t.clientX - (r.left + r.width / 2)));
-                const oy = Math.max(-clamp, Math.min(clamp, t.clientY - (r.top + r.height / 2)));
-                jLookKnob.style.transform = `translate(calc(-50% + ${ox}px), calc(-50% + ${oy}px))`; */
+                const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+                let dx = t.clientX - cx, dy = t.clientY - cy;
+                const dist = Math.sqrt(dx * dx + dy * dy);
                 const clamp = 40;
-                let kx = (kx_acc = Math.max(-clamp, Math.min(clamp, (kx_acc || 0) + dx)));
-                let ky = (ky_acc = Math.max(-clamp, Math.min(clamp, (ky_acc || 0) + dy)));
-                jLookKnob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
+
+                const clampedDist = Math.min(dist, clamp);
+                if (dist > 0) {
+                    dx = (dx / dist) * clampedDist;
+                    dy = (dy / dist) * clampedDist;
+                }
+
+                // This captures the "tilt" amount for the animation loop
+                lookVec.x = dx / clamp;
+                lookVec.y = dy / clamp;
+
+                jLookKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
             }
         }, { passive: false });
+
         jLook.addEventListener('touchend', e => {
             e.preventDefault();
-            //lookTouchId = null;
-            lookTouchId = null; kx_acc = 0; ky_acc = 0;
+            lookTouchId = null;
+            lookVec = { x: 0, y: 0 }; // Stops the rotation
             jLookKnob.style.transform = 'translate(-50%,-50%)';
         }, { passive: false });
 
@@ -795,23 +834,35 @@
             const dt = Math.min(clock.getDelta(), 0.05);
             const spd = keys['shift'] ? 0.35 : 0.18;
 
+            // 1. ROTATION LOGIC (The new "Continuous" Look part)
+            if (isMobile && lookTouchId !== null) {
+                const turnSensitivity = 0.05; // Adjust this number to turn faster/slower
+                theta -= lookVec.x * turnSensitivity;
+                phi = Math.max(-1.2, Math.min(1.2, phi - lookVec.y * turnSensitivity));
+            }
+
+            // 2. MOVEMENT VECTORS
             const fwd = new THREE.Vector3(Math.sin(theta), 0, Math.cos(theta));
             const rgt = new THREE.Vector3(Math.sin(theta + Math.PI / 2), 0, Math.cos(theta + Math.PI / 2));
 
+            // 3. KEYBOARD MOVEMENT
             if (keys['w'] || keys['arrowup']) camera.position.addScaledVector(fwd, spd);
             if (keys['s'] || keys['arrowdown']) camera.position.addScaledVector(fwd, -spd);
             if (keys['a'] || keys['arrowleft']) camera.position.addScaledVector(rgt, spd);
             if (keys['d'] || keys['arrowright']) camera.position.addScaledVector(rgt, -spd);
-            // --- PASTE THIS FIX HERE ---
+
+            // 4. MOBILE MOVEMENT (Joystick)
             if (isMobile) {
-                // moveVec.y is the up/down tilt, moveVec.x is left/right
                 camera.position.addScaledVector(fwd, -moveVec.y * spd);
                 camera.position.addScaledVector(rgt, -moveVec.x * spd);
             }
+
+            // 5. PHYSICS (Gravity/Jump)
             vy -= 0.018;
             camera.position.y += vy;
             if (camera.position.y < 2.2) { camera.position.y = 2.2; vy = 0; isGrounded = true; }
 
+            // 6. APPLY LOOK DIRECTION
             const look = new THREE.Vector3(
                 Math.sin(theta) * Math.cos(phi),
                 -Math.sin(phi),
@@ -822,7 +873,6 @@
             updateChunks();
             renderer.render(scene, camera);
         }
-
         window.addEventListener('resize', () => {
             camera.aspect = innerWidth / innerHeight;
             camera.updateProjectionMatrix();
