@@ -701,7 +701,6 @@
             e.preventDefault();
             const t = e.changedTouches[0];
             moveTouchId = t.identifier;
-            lastMoveX = t.clientX; lastMoveY = t.clientY;
             updateMoveJoy(t);
         }, { passive: false });
         jMove.addEventListener('touchmove', e => {
@@ -716,8 +715,6 @@
             moveVec = { x: 0, y: 0 };
             jMoveKnob.style.transform = 'translate(-50%,-50%)';
         }, { passive: false });
-
-        let lastMoveX = 0, lastMoveY = 0;
 
         function updateMoveJoy(t) {
             const r = jMove.getBoundingClientRect();
