@@ -678,7 +678,8 @@
         document.addEventListener('mousemove', e => {
             if (document.pointerLockElement !== renderer.domElement) return;
             theta -= e.movementX * 0.004;
-            phi = Math.max(-1.2, Math.min(1.2, phi - e.movementY * 0.004));
+            //phi = Math.max(-1.2, Math.min(1.2, phi - e.movementY * 0.004));
+            phi = Math.max(-1.2, Math.min(1.2, phi + e.movementY * 0.004));
         });
 
         // Detect mobile
