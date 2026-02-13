@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dystopian Wasteland</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            overflow: hidden;
+            background: #1a1a1a;
+            font-family: 'Courier New', monospace;
+        }
+
+        #hud {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            color: #ff4400;
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #ff4400;
+            padding: 10px 14px;
+            border-radius: 4px;
+            font-size: 13px;
+            z-index: 100;
+            text-shadow: 0 0 8px #ff4400;
+            line-height: 1.7;
+        }
+
+        #warning {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            color: #ffcc00;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid #ffcc00;
+            padding: 8px 14px;
+            font-size: 13px;
+            z-index: 100;
+            font-weight: bold;
+            animation: blink 1.4s infinite;
+            text-shadow: 0 0 8px #ffcc00;
+        }
+
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff4400;
+            font-size: 20px;
+            z-index: 100;
+            opacity: 0.7;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #ff4400;
+            font-size: 26px;
+            font-weight: bold;
+            letter-spacing: 4px;
+            text-align: center;
+            text-shadow: 0 0 20px #ff4400;
+            z-index: 200;
+        }
+
+        #loading::after {
+            content: '';
+            display: block;
+            width: 50px;
+            height: 50px;
+            margin: 16px auto 0;
+            border: 3px solid #333;
+            border-top-color: #ff4400;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: 0.3
+            }
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="hud">
+        ▲ WASD / ARROWS: Move<br>
+        ● SPACE: Jump<br>
+        ■ SHIFT: Sprint<br>
+        ✦ CLICK: Look
+    </div>
+    <div id="warning">⚠ DANGER ZONE — AUTHORIZED PERSONNEL ONLY</div>
+    <div id="crosshair">+</div>
+    <div id="loading">ENTERING SECTOR 7<br><span style="font-size:14px;opacity:0.6">LOADING WASTELAND...</span></div>
+
+    <!-- Mobile joystick UI -->
+    <div id="joy-look"
+        style="position:absolute;right:24px;bottom:140px;width:110px;height:110px;background:rgba(255,100,0,0.15);border:2px solid rgba(255,100,0,0.4);border-radius:50%;touch-action:none;z-index:300;display:none;">
+        <div id="joy-look-knob"
+            style="position:absolute;width:44px;height:44px;background:rgba(255,100,0,0.6);border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);">
+        </div>
+    </div>
+    <div id="joy-move"
+        style="position:absolute;left:24px;bottom:140px;width:110px;height:110px;background:rgba(255,100,0,0.15);border:2px solid rgba(255,100,0,0.4);border-radius:50%;touch-action:none;z-index:300;display:none;">
+        <div id="joy-move-knob"
+            style="position:absolute;width:44px;height:44px;background:rgba(255,100,0,0.6);border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);">
+        </div>
+    </div>
+    <button id="btn-jump"
+        style="position:absolute;right:24px;bottom:40px;width:80px;height:80px;background:rgba(255,200,0,0.2);border:2px solid #ffcc00;border-radius:50%;color:#ffcc00;font-family:Courier New,monospace;font-size:13px;font-weight:bold;z-index:300;display:none;touch-action:none;">JUMP</button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x1a1008, 0.018);
+        scene.background = new THREE.Color(0x1a1008);
+
+        const camera = new THREE.PerspectiveCamera(80, innerWidth / innerHeight, 0.1, 300);
+        camera.position.set(0, 2.2, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(innerWidth, innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+        document.body.appendChild(renderer.domElement);
+
+        setTimeout(() => document.getElementById('loading').style.display = 'none', 1200);
+
+        // === LIGHTING ===
+        scene.add(new THREE.AmbientLight(0x554433, 2.2));
+
+        const sun = new THREE.DirectionalLight(0xff9944, 1.1);
+        sun.position.set(-30, 60, -20);
+        sun.castShadow = true;
+        sun.shadow.camera.left = -80; sun.shadow.camera.right = 80;
+        sun.shadow.camera.top = 80; sun.shadow.camera.bottom = -80;
+        sun.shadow.camera.far = 200;
+        scene.add(sun);
+
+        // Hellish red fill
+        const fillLight = new THREE.DirectionalLight(0x885522, 0.8);
+        fillLight.position.set(30, 10, 30);
+        scene.add(fillLight);
+
+        // First-person helmet torch
+        const torch = new THREE.SpotLight(0xfff5cc, 2.5, 50, Math.PI / 7, 0.4, 1.2);
+        torch.position.set(0, 0, 0);
+        camera.add(torch);
+        const torchTarget = new THREE.Object3D();
+        torchTarget.position.set(0, 0, -10);
+        camera.add(torchTarget);
+        torch.target = torchTarget;
+        scene.add(camera);
+
+        // === MATERIALS ===
+        const concreteMat = new THREE.MeshLambertMaterial({ color: 0x5a5550 });
+        const darkConcrete = new THREE.MeshLambertMaterial({ color: 0x38322e });
+        const brickMat = new THREE.MeshLambertMaterial({ color: 0x7a3a2a });
+        const darkBrick = new THREE.MeshLambertMaterial({ color: 0x4a2218 });
+        const steelMat = new THREE.MeshPhongMaterial({ color: 0x445566, shininess: 60 });
+        const rustMat = new THREE.MeshLambertMaterial({ color: 0x7a3a1a });
+        const groundMat = new THREE.MeshLambertMaterial({ color: 0x2a2018 });
+        const dirtMat = new THREE.MeshLambertMaterial({ color: 0x3a2e1a });
+        const boneMat = new THREE.MeshLambertMaterial({ color: 0xd4c9a8 });
+        const warnYellow = new THREE.MeshLambertMaterial({ color: 0xffcc00 });
+        const warnBlack = new THREE.MeshLambertMaterial({ color: 0x111111 });
+        const hardhatMat = new THREE.MeshPhongMaterial({ color: 0xffaa00, shininess: 80 });
+        const glassMat = new THREE.MeshPhongMaterial({ color: 0x334455, transparent: true, opacity: 0.4, shininess: 120 });
+        const emberMat = new THREE.MeshPhongMaterial({ color: 0xff3300, emissive: 0xff2200, emissiveIntensity: 0.6 });
+
+        // === HELPERS ===
+        function rnd(a, b) { return a + Math.random() * (b - a); }
+        function rndInt(a, b) { return Math.floor(rnd(a, b + 1)); }
+
+        // === OBJECTS ===
+
+        function createBrick(x, y, z, rx = 0, ry = 0) {
+            const g = new THREE.BoxGeometry(rnd(0.4, 0.9), rnd(0.25, 0.45), rnd(0.4, 0.75));
+            const m = new THREE.Mesh(g, Math.random() > 0.4 ? brickMat : darkBrick);
+            m.position.set(x, y, z);
+            m.rotation.set(rx, ry, rnd(-0.3, 0.3));
+            m.castShadow = true; m.receiveShadow = true;
+            return m;
+        }
+
+        function createBrickPile(x, z) {
+            const g = new THREE.Group();
+            const count = rndInt(8, 20);
+            for (let i = 0; i < count; i++) {
+                g.add(createBrick(rnd(-1.5, 1.5), rnd(0, 1.2), rnd(-1.5, 1.5)));
+            }
+            g.position.set(x, 0, z);
+            return g;
+        }
+
+        function createRuinedBuilding(x, z, w, d, fullH, demolishFraction) {
+            const g = new THREE.Group();
+            const floorCount = rndInt(3, 8);
+            const floorH = fullH / floorCount;
+
+            for (let f = 0; f < floorCount; f++) {
+                const survive = (f / floorCount) < (1 - demolishFraction);
+                if (!survive && Math.random() > 0.3) continue;
+
+                const fw = survive ? w : w * rnd(0.4, 0.9);
+                const fd = survive ? d : d * rnd(0.4, 0.9);
+                const fh = floorH * rnd(0.7, 1.0);
+
+                const wallMat = Math.random() > 0.5 ? concreteMat : darkConcrete;
+
+                // Walls (hollow shell)
+                const walls = [
+                    [fw, fh, 0.35, 0, f * floorH + fh / 2, -(fd / 2)],
+                    [fw, fh, 0.35, 0, f * floorH + fh / 2, (fd / 2)],
+                    [0.35, fh, fd, -(fw / 2), f * floorH + fh / 2, 0],
+                    [0.35, fh, fd, (fw / 2), f * floorH + fh / 2, 0],
+                ];
+                walls.forEach(([ww, wh, wd, wx, wy, wz]) => {
+                    const wg = new THREE.BoxGeometry(ww, wh, wd);
+                    const wm = new THREE.Mesh(wg, wallMat);
+                    wm.position.set(wx, wy, wz);
+                    wm.castShadow = true; wm.receiveShadow = true;
+                    g.add(wm);
+                });
+
+                // Floor slab
+                if (f > 0) {
+                    const slabG = new THREE.BoxGeometry(fw, 0.2, fd);
+                    const slab = new THREE.Mesh(slabG, darkConcrete);
+                    slab.position.set(0, f * floorH, 0);
+                    slab.receiveShadow = true;
+                    g.add(slab);
+                }
+
+                // Windows on surviving floors
+                if (survive && fw > 3) {
+                    for (let wi = 0; wi < rndInt(1, 3); wi++) {
+                        const wfg = new THREE.BoxGeometry(1.2, 1.6, 0.1);
+                        const wf = new THREE.Mesh(wfg, Math.random() > 0.5 ? glassMat : darkConcrete);
+                        wf.position.set(rnd(-fw / 2 + 1, fw / 2 - 1), f * floorH + floorH * 0.5, fd / 2 + 0.1);
+                        g.add(wf);
+                    }
+                }
+
+                // Rebar sticking out of broken floors
+                if (!survive) {
+                    for (let r = 0; r < rndInt(2, 5); r++) {
+                        const rbg = new THREE.CylinderGeometry(0.05, 0.05, rnd(1, 3), 5);
+                        const rb = new THREE.Mesh(rbg, steelMat);
+                        rb.position.set(rnd(-fw / 2, fw / 2), f * floorH + rnd(0, 1.5), rnd(-fd / 2, fd / 2));
+                        rb.rotation.set(rnd(-0.4, 0.4), 0, rnd(-0.4, 0.4));
+                        g.add(rb);
+                    }
+                }
+            }
+
+            // Rubble at base
+            for (let i = 0; i < rndInt(5, 12); i++) {
+                g.add(createBrick(rnd(-w, w), rnd(0, 0.5), rnd(-d, d)));
+            }
+
+            g.position.set(x, 0, z);
+            return g;
+        }
+
+        function createSteelBeam(x, y, z, len, rx, ry, rz) {
+            const g = new THREE.BoxGeometry(0.3, len, 0.3);
+            const m = new THREE.Mesh(g, Math.random() > 0.5 ? steelMat : rustMat);
+            m.position.set(x, y, z);
+            m.rotation.set(rx, ry, rz);
+            m.castShadow = true;
+            return m;
+        }
+
+        function createGiantRibcage(x, z) {
+            const g = new THREE.Group();
+            const ribCount = 8;
+            const spineLen = 24;
+
+            // Spine
+            const spineG = new THREE.CylinderGeometry(0.3, 0.4, spineLen, 8);
+            const spine = new THREE.Mesh(spineG, boneMat);
+            spine.rotation.z = Math.PI / 2;
+            spine.position.y = 1.5;
+            spine.castShadow = true;
+            g.add(spine);
+
+            // Ribs
+            for (let i = 0; i < ribCount; i++) {
+                const t = (i / ribCount - 0.5) * spineLen * 0.85;
+                const ribH = rnd(5, 9);
+                const curveSegs = 10;
+                const pts = [];
+                for (let s = 0; s <= curveSegs; s++) {
+                    const a = (s / curveSegs) * Math.PI;
+                    pts.push(new THREE.Vector3(
+                        Math.sin(a) * rnd(3.5, 5.5),
+                        Math.cos(a) * ribH * 0.5 + ribH * 0.5,
+                        0
+                    ));
+                }
+                const curve = new THREE.CatmullRomCurve3(pts);
+                const ribGeo = new THREE.TubeGeometry(curve, 12, 0.18, 6, false);
+                const rib = new THREE.Mesh(ribGeo, boneMat);
+                rib.position.set(t, 1.5, 0);
+                rib.castShadow = true;
+                g.add(rib);
+
+                // Mirror rib
+                const rib2 = rib.clone();
+                rib2.scale.x = -1;
+                g.add(rib2);
+            }
+
+            // Skull-like head
+            const skullG = new THREE.SphereGeometry(2.5, 10, 8);
+            const skull = new THREE.Mesh(skullG, boneMat);
+            skull.scale.set(1.2, 0.9, 1.5);
+            skull.position.set(spineLen / 2 + 2, 2.5, 0);
+            skull.castShadow = true;
+            g.add(skull);
+
+            // Eye sockets
+            [1, -1].forEach(side => {
+                const eyeG = new THREE.SphereGeometry(0.7, 8, 6);
+                const eyeMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+                const eye = new THREE.Mesh(eyeG, eyeMat);
+                eye.position.set(spineLen / 2 + 3.5, 3.2, side * 1.3);
+                g.add(eye);
+            });
+
+            g.position.set(x, 0, z);
+            g.rotation.y = rnd(0, Math.PI * 2);
+            return g;
+        }
+
+        function createGiantSpine(x, z) {
+            const g = new THREE.Group();
+            const count = rndInt(6, 12);
+            for (let i = 0; i < count; i++) {
+                const vG = new THREE.SphereGeometry(rnd(0.5, 1.0), 8, 6);
+                const v = new THREE.Mesh(vG, boneMat);
+                v.position.set(i * rnd(1.2, 2), rnd(0.3, 1.5), rnd(-0.5, 0.5));
+                v.castShadow = true;
+                g.add(v);
+
+                // Spiny process
+                if (Math.random() > 0.4) {
+                    const spG = new THREE.CylinderGeometry(0.08, 0.15, rnd(0.8, 2), 5);
+                    const sp = new THREE.Mesh(spG, boneMat);
+                    sp.position.set(i * rnd(1.2, 2), rnd(1, 2.5), rnd(-0.3, 0.3));
+                    sp.rotation.set(rnd(-0.3, 0.3), 0, rnd(-0.2, 0.2));
+                    g.add(sp);
+                }
+            }
+            g.position.set(x, 0, z);
+            g.rotation.y = rnd(0, Math.PI * 2);
+            return g;
+        }
+
+        function createArtWorkersSign(x, z) {
+            const g = new THREE.Group();
+
+            // Posts
+            [-1.8, 1.8].forEach(px => {
+                const postG = new THREE.CylinderGeometry(0.1, 0.1, 5.5, 6);
+                const post = new THREE.Mesh(postG, steelMat);
+                post.position.set(px, 2.75, 0);
+                post.castShadow = true;
+                g.add(post);
+            });
+
+            // Backing board
+            const boardG = new THREE.BoxGeometry(4.2, 1.8, 0.12);
+            const boardMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+            const board = new THREE.Mesh(boardG, boardMat);
+            board.position.set(0, 4.2, 0);
+            g.add(board);
+
+            // Yellow border frame
+            const frameG = new THREE.BoxGeometry(4.4, 2.0, 0.08);
+            const frame = new THREE.Mesh(frameG, warnYellow);
+            frame.position.set(0, 4.2, -0.03);
+            g.add(frame);
+
+            // AW.jpg image on sign face
+            const awTex = new THREE.TextureLoader().load('aw.jpg');
+            awTex.encoding = THREE.sRGBEncoding;
+            // Fit 901x1201 image — portrait, so rotate 90deg or scale to fit landscape board
+            // Board is 4.2 wide x 1.8 tall. Image is portrait so we scale to fill height.
+            const imgMat = new THREE.MeshBasicMaterial({ map: awTex });
+            // 901/1201 ≈ 0.75 aspect; scaled to board height 1.6 → width = 1.6 * 0.75 = 1.2
+            const imgG = new THREE.PlaneGeometry(1.2, 1.6);
+            const imgMesh = new THREE.Mesh(imgG, imgMat);
+            imgMesh.position.set(0, 4.2, 0.13);
+            g.add(imgMesh);
+
+            // Hazard stripes along the bottom
+            for (let i = 0; i < 7; i++) {
+                const sG = new THREE.BoxGeometry(0.5, 0.35, 0.1);
+                const s = new THREE.Mesh(sG, i % 2 === 0 ? warnYellow : warnBlack);
+                s.position.set(-1.5 + i * 0.5, 3.4, 0.01);
+                g.add(s);
+            }
+
+            // Slight lean for worn look
+            g.rotation.y = rnd(-0.2, 0.2);
+            g.rotation.z = rnd(-0.05, 0.05);
+            g.position.set(x, 0, z);
+            return g;
+        }
+
+        function createWarningSign(x, z, ry = 0) {
+            const g = new THREE.Group();
+            // Post
+            const postG = new THREE.CylinderGeometry(0.08, 0.08, 4, 6);
+            const post = new THREE.Mesh(postG, steelMat);
+            post.position.y = 2;
+            g.add(post);
+            // Board
+            const boardG = new THREE.BoxGeometry(2, 1, 0.08);
+            const board = new THREE.Mesh(boardG, warnYellow);
+            board.position.y = 3.8;
+            g.add(board);
+            // Stripes
+            for (let i = 0; i < 4; i++) {
+                const sG = new THREE.BoxGeometry(0.35, 1, 0.09);
+                const s = new THREE.Mesh(sG, i % 2 === 0 ? warnBlack : warnYellow);
+                s.position.set(-0.8 + i * 0.5, 3.8, 0);
+                g.add(s);
+            }
+            // Lean slightly
+            g.rotation.y = ry;
+            g.rotation.z = rnd(-0.15, 0.15);
+            g.position.set(x, 0, z);
+            return g;
+        }
+
+        function createHardhat(x, y, z, ry = 0) {
+            const g = new THREE.Group();
+            const domG = new THREE.SphereGeometry(0.4, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.55);
+            const dom = new THREE.Mesh(domG, hardhatMat);
+            dom.position.y = 0.1;
+            g.add(dom);
+            const brimG = new THREE.CylinderGeometry(0.5, 0.5, 0.08, 12);
+            const brim = new THREE.Mesh(brimG, hardhatMat);
+            g.add(brim);
+            g.position.set(x, y, z);
+            g.rotation.set(rnd(-0.5, 0.5), ry, rnd(-0.5, 0.5));
+            return g;
+        }
+
+        function createFireBarrel(x, z) {
+            const g = new THREE.Group();
+            const barrelG = new THREE.CylinderGeometry(0.6, 0.55, 1.4, 10);
+            const barrel = new THREE.Mesh(barrelG, rustMat);
+            barrel.position.y = 0.7;
+            barrel.castShadow = true;
+            g.add(barrel);
+            // Hoops
+            [0.4, 0.9, 1.2].forEach(hy => {
+                const hoopG = new THREE.TorusGeometry(0.63, 0.04, 6, 12);
+                const hoop = new THREE.Mesh(hoopG, steelMat);
+                hoop.rotation.x = Math.PI / 2;
+                hoop.position.y = hy;
+                g.add(hoop);
+            });
+            // Fire glow
+            const fireLight = new THREE.PointLight(0xff4400, 1.5, 12);
+            fireLight.position.y = 2;
+            g.add(fireLight);
+            const emberG = new THREE.SphereGeometry(0.3, 6, 5);
+            const ember = new THREE.Mesh(emberG, emberMat);
+            ember.position.y = 1.6;
+            g.add(ember);
+            g.position.set(x, 0, z);
+            return g;
+        }
+
+        function createCraneArm(x, z) {
+            const g = new THREE.Group();
+            // Tower
+            const towerG = new THREE.BoxGeometry(1.2, 20, 1.2);
+            const tower = new THREE.Mesh(towerG, steelMat);
+            tower.position.y = 10;
+            tower.castShadow = true;
+            g.add(tower);
+            // Arm
+            const armG = new THREE.BoxGeometry(18, 0.5, 0.5);
+            const arm = new THREE.Mesh(armG, steelMat);
+            arm.position.set(5, 20, 0);
+            arm.castShadow = true;
+            g.add(arm);
+            // Cable
+            const cableG = new THREE.CylinderGeometry(0.05, 0.05, 8, 4);
+            const cable = new THREE.Mesh(cableG, steelMat);
+            cable.position.set(10, 16, 0);
+            g.add(cable);
+            // Hook
+            const hookG = new THREE.TorusGeometry(0.4, 0.1, 6, 8, Math.PI);
+            const hook = new THREE.Mesh(hookG, steelMat);
+            hook.position.set(10, 11.5, 0);
+            hook.rotation.z = Math.PI;
+            g.add(hook);
+            g.position.set(x, 0, z);
+            g.rotation.y = rnd(0, Math.PI * 2);
+            return g;
+        }
+
+        function createScaffold(x, z, h = 10, w = 6) {
+            const g = new THREE.Group();
+            const floors = Math.floor(h / 2.5);
+            for (let f = 0; f <= floors; f++) {
+                const y = f * 2.5;
+                // Horizontal bars
+                [[-w / 2, 0], [w / 2, 0], [0, -w / 2], [0, w / 2]].forEach(([bx, bz]) => {
+                    const bg = new THREE.CylinderGeometry(0.07, 0.07, w, 5);
+                    const b = new THREE.Mesh(bg, steelMat);
+                    b.position.set(bx, y, bz);
+                    b.rotation.z = bx !== 0 ? Math.PI / 2 : 0;
+                    b.rotation.x = bz !== 0 ? Math.PI / 2 : 0;
+                    g.add(b);
+                });
+            }
+            // Vertical poles
+            [[-w / 2, -w / 2], [w / 2, -w / 2], [-w / 2, w / 2], [w / 2, w / 2]].forEach(([px, pz]) => {
+                const pg = new THREE.CylinderGeometry(0.07, 0.07, h, 5);
+                const p = new THREE.Mesh(pg, rustMat);
+                p.position.set(px, h / 2, pz);
+                g.add(p);
+            });
+            g.position.set(x, 0, z);
+            return g;
+        }
+
+        function createChunk(cx, cz) {
+            const key = `${cx},${cz}`;
+            const g = new THREE.Group();
+            const off = cx * CHUNK + CHUNK / 2;
+            const offZ = cz * CHUNK + CHUNK / 2;
+
+            // Ground
+            const groundG = new THREE.PlaneGeometry(CHUNK, CHUNK, 8, 8);
+            const ground = new THREE.Mesh(groundG, Math.random() > 0.5 ? groundMat : dirtMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            g.add(ground);
+
+            // Cracked concrete patches
+            for (let i = 0; i < rndInt(2, 5); i++) {
+                const pG = new THREE.PlaneGeometry(rnd(3, 10), rnd(3, 8));
+                const patch = new THREE.Mesh(pG, concreteMat);
+                patch.rotation.x = -Math.PI / 2;
+                patch.position.set(rnd(-CHUNK / 2, CHUNK / 2), 0.02, rnd(-CHUNK / 2, CHUNK / 2));
+                g.add(patch);
+            }
+
+            // Ruined buildings
+            const buildingCount = rndInt(1, 3);
+            for (let i = 0; i < buildingCount; i++) {
+                const bw = rnd(5, 14), bd = rnd(5, 14), bh = rnd(8, 25);
+                const dmf = rnd(0.2, 0.8);
+                g.add(createRuinedBuilding(rnd(-20, 20), rnd(-20, 20), bw, bd, bh, dmf));
+            }
+
+            // Giant beast bones
+            if (Math.random() > 0.45) g.add(createGiantRibcage(rnd(-18, 18), rnd(-18, 18)));
+            if (Math.random() > 0.5) g.add(createGiantSpine(rnd(-18, 18), rnd(-18, 18)));
+
+            // Steel beams strewn around
+            for (let i = 0; i < rndInt(2, 6); i++) {
+                const blen = rnd(3, 10);
+                g.add(createSteelBeam(
+                    rnd(-22, 22), rnd(0.2, 0.8), rnd(-22, 22),
+                    blen, rnd(-0.4, 0.4), rnd(0, Math.PI), rnd(-0.4, 0.4)
+                ));
+            }
+
+            // Brick piles
+            for (let i = 0; i < rndInt(2, 5); i++) {
+                g.add(createBrickPile(rnd(-22, 22), rnd(-22, 22)));
+            }
+
+            // Warning signs
+            for (let i = 0; i < rndInt(1, 3); i++) {
+                g.add(createWarningSign(rnd(-22, 22), rnd(-22, 22), rnd(0, Math.PI * 2)));
+            }
+
+            // ART WORKERS sign — one per chunk, near spawn always visible
+            if (cx === 0 && cz === 0) {
+                g.add(createArtWorkersSign(0, -10));
+            } else if (Math.random() > 0.6) {
+                g.add(createArtWorkersSign(rnd(-18, 18), rnd(-18, 18)));
+            }
+
+            // Hardhats scattered
+            for (let i = 0; i < rndInt(1, 4); i++) {
+                g.add(createHardhat(rnd(-22, 22), rnd(0.05, 0.5), rnd(-22, 22)));
+            }
+
+            // Fire barrels
+            for (let i = 0; i < rndInt(0, 3); i++) {
+                g.add(createFireBarrel(rnd(-20, 20), rnd(-20, 20)));
+            }
+
+            // Scaffolding
+            if (Math.random() > 0.5) {
+                g.add(createScaffold(rnd(-15, 15), rnd(-15, 15), rnd(6, 16), rnd(4, 8)));
+            }
+
+            // Crane
+            if (Math.random() > 0.65) {
+                g.add(createCraneArm(rnd(-10, 10), rnd(-10, 10)));
+            }
+
+            g.position.set(cx * CHUNK, 0, cz * CHUNK);
+            chunks.set(key, g);
+            scene.add(g);
+            loaded.add(key);
+        }
+
+        const CHUNK = 60;
+        const chunks = new Map(), loaded = new Set();
+
+        function updateChunks() {
+            const pcx = Math.floor(camera.position.x / CHUNK);
+            const pcz = Math.floor(camera.position.z / CHUNK);
+            const R = 2;
+            for (let x = -R; x <= R; x++) for (let z = -R; z <= R; z++) {
+                const key = `${pcx + x},${pcz + z}`;
+                if (!loaded.has(key)) createChunk(pcx + x, pcz + z);
+            }
+            loaded.forEach(key => {
+                const [cx, cz] = key.split(',').map(Number);
+                if (Math.max(Math.abs(cx - pcx), Math.abs(cz - pcz)) > R + 1) {
+                    scene.remove(chunks.get(key));
+                    chunks.delete(key); loaded.delete(key);
+                }
+            });
+        }
+
+        // === CONTROLS ===
+        const keys = {};
+        document.addEventListener('keydown', e => {
+            keys[e.key.toLowerCase()] = true;
+            if (e.key === ' ' && isGrounded) { vy = 0.28; isGrounded = false; }
+            e.preventDefault();
+        });
+        document.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+        renderer.domElement.addEventListener('click', () => renderer.domElement.requestPointerLock());
+
+        let theta = 0, phi = 0;
+        document.addEventListener('mousemove', e => {
+            if (document.pointerLockElement !== renderer.domElement) return;
+            theta -= e.movementX * 0.004;
+            phi = Math.max(-1.2, Math.min(1.2, phi - e.movementY * 0.004));
+        });
+
+        // Detect mobile
+        const isMobile = /Mobi|Android|iPhone|iPad|iPod|Touch/i.test(navigator.userAgent) || ('ontouchstart' in window);
+
+        if (isMobile) {
+            document.getElementById('joy-move').style.display = 'block';
+            document.getElementById('joy-look').style.display = 'block';
+            document.getElementById('btn-jump').style.display = 'block';
+            document.getElementById('hud').style.display = 'none';
+        }
+
+        // Move joystick
+        const jMove = document.getElementById('joy-move');
+        const jMoveKnob = document.getElementById('joy-move-knob');
+        let moveVec = { x: 0, y: 0 };
+        let moveTouchId = null;
+
+        jMove.addEventListener('touchstart', e => {
+            e.preventDefault();
+            const t = e.changedTouches[0];
+            moveTouchId = t.identifier;
+            lastMoveX = t.clientX; lastMoveY = t.clientY;
+            updateMoveJoy(t);
+        }, { passive: false });
+        jMove.addEventListener('touchmove', e => {
+            e.preventDefault();
+            for (const t of e.changedTouches) {
+                if (t.identifier === moveTouchId) updateMoveJoy(t);
+            }
+        }, { passive: false });
+        jMove.addEventListener('touchend', e => {
+            e.preventDefault();
+            moveTouchId = null;
+            moveVec = { x: 0, y: 0 };
+            jMoveKnob.style.transform = 'translate(-50%,-50%)';
+        }, { passive: false });
+
+        let lastMoveX = 0, lastMoveY = 0;
+
+        function updateMoveJoy(t) {
+            const r = jMove.getBoundingClientRect();
+            const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+            let dx = t.clientX - cx, dy = t.clientY - cy;
+            const dist = Math.min(Math.sqrt(dx * dx + dy * dy), 40);
+            const angle = Math.atan2(dy, dx);
+            dx = Math.cos(angle) * dist; dy = Math.sin(angle) * dist;
+            moveVec = { x: dx / 40, y: dy / 40 };
+            jMoveKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+        }
+
+        // Look joystick
+        const jLook = document.getElementById('joy-look');
+        const jLookKnob = document.getElementById('joy-look-knob');
+        let lookTouchId = null, lastLookX = 0, lastLookY = 0;
+
+        jLook.addEventListener('touchstart', e => {
+            e.preventDefault();
+            const t = e.changedTouches[0];
+            lookTouchId = t.identifier;
+            lastLookX = t.clientX; lastLookY = t.clientY;
+        }, { passive: false });
+        jLook.addEventListener('touchmove', e => {
+            e.preventDefault();
+            for (const t of e.changedTouches) {
+                if (t.identifier !== lookTouchId) continue;
+                const dx = t.clientX - lastLookX, dy = t.clientY - lastLookY;
+                theta -= dx * 0.006;
+                phi = Math.max(-1.2, Math.min(1.2, phi - dy * 0.006));
+                lastLookX = t.clientX; lastLookY = t.clientY;
+                const clamp = 40;
+                const r = jLook.getBoundingClientRect();
+                const ox = Math.max(-clamp, Math.min(clamp, t.clientX - (r.left + r.width / 2)));
+                const oy = Math.max(-clamp, Math.min(clamp, t.clientY - (r.top + r.height / 2)));
+                jLookKnob.style.transform = `translate(calc(-50% + ${ox}px), calc(-50% + ${oy}px))`;
+            }
+        }, { passive: false });
+        jLook.addEventListener('touchend', e => {
+            e.preventDefault();
+            lookTouchId = null;
+            jLookKnob.style.transform = 'translate(-50%,-50%)';
+        }, { passive: false });
+
+        // Jump button
+        document.getElementById('btn-jump').addEventListener('touchstart', e => {
+            e.preventDefault();
+            if (isGrounded) { vy = 0.28; isGrounded = false; }
+        }, { passive: false });
+
+        // Show click-to-look hint (desktop only)
+        if (!isMobile) {
+            const hint = document.createElement('div');
+            hint.style.cssText = 'position:absolute;bottom:20px;left:50%;transform:translateX(-50%);color:#ffcc00;background:rgba(0,0,0,0.7);border:1px solid #ffcc00;padding:8px 18px;font-family:Courier New,monospace;font-size:14px;z-index:200;letter-spacing:1px;';
+            hint.textContent = '🖱 CLICK TO ENABLE MOUSE LOOK';
+            document.body.appendChild(hint);
+            document.addEventListener('pointerlockchange', () => {
+                hint.style.display = document.pointerLockElement ? 'none' : 'block';
+            });
+        }
+
+        let vy = 0, isGrounded = true;
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.05);
+            const spd = keys['shift'] ? 0.35 : 0.18;
+
+            const fwd = new THREE.Vector3(Math.sin(theta), 0, Math.cos(theta));
+            const rgt = new THREE.Vector3(Math.sin(theta + Math.PI / 2), 0, Math.cos(theta + Math.PI / 2));
+
+            if (keys['w'] || keys['arrowup']) camera.position.addScaledVector(fwd, spd);
+            if (keys['s'] || keys['arrowdown']) camera.position.addScaledVector(fwd, -spd);
+            if (keys['a'] || keys['arrowleft']) camera.position.addScaledVector(rgt, spd);
+            if (keys['d'] || keys['arrowright']) camera.position.addScaledVector(rgt, -spd);
+
+            vy -= 0.018;
+            camera.position.y += vy;
+            if (camera.position.y < 2.2) { camera.position.y = 2.2; vy = 0; isGrounded = true; }
+
+            const look = new THREE.Vector3(
+                Math.sin(theta) * Math.cos(phi),
+                -Math.sin(phi),
+                Math.cos(theta) * Math.cos(phi)
+            );
+            camera.lookAt(camera.position.clone().add(look));
+
+            updateChunks();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = innerWidth / innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(innerWidth, innerHeight);
+        });
+
+        updateChunks();
+        animate();
+    </script>
+</body>
+
+</html>
